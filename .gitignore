@@ -1,0 +1,13 @@
+*.cache/*
+*.hw/*
+*.ip_user_files/*
+*.runs/*
+*.tcl
+*.sim/*
+*.xpr
+*.dcp
+
+*.exe
+*.pdb
+*.mem
+*.mem.v
