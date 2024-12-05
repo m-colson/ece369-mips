@@ -5,15 +5,14 @@ import "core:io"
 import "core:os"
 
 main :: proc() {
-	// gen_controller_verilog("controls.v")
 	gen_controller_mem("controls.mem.v", true)
 
-	if err := copy_file("lab7\\vbsme_inst.mem", "instruction_memory.mem"); err != nil {
-		panic(fmt.tprint(err))
-	}
-	if err := copy_file("lab7\\vbsme_data.mem", "data_memory.mem"); err != nil {
-		panic(fmt.tprint(err))
-	}
+	// if err := copy_file("lab7\\vbsme_inst.mem", "instruction_memory.mem"); err != nil {
+	// 	panic(fmt.tprint(err))
+	// }
+	// if err := copy_file("lab7\\vbsme_data.mem", "data_memory.mem"); err != nil {
+	// 	panic(fmt.tprint(err))
+	// }
 
 	// prog := collatz(1)
 	// defer delete(prog)
