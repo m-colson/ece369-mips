@@ -39,19 +39,7 @@ fix_file :: proc(path: string, out_path: string) {
 	}
 }
 
-gen_controller_mem :: proc(out_path: string) {
-	out, err := os.open(out_path, os.O_CREATE | os.O_TRUNC, 0o666)
-	if err != nil {
-		panic(fmt.tprint(err))
-	}
-	defer os.close(out)
-
-	for c in instruction_controls() {
-		fmt.fprintfln(out, "%5x", transmute(u32)c)
-	}
-}
-
-gen_controller_verilog :: proc(out_path: string) {
+gen_controller_mem :: proc(out_path: string, code_like := false) {
 	out, err := os.open(out_path, os.O_CREATE | os.O_TRUNC, 0o666)
 	if err != nil {
 		panic(fmt.tprint(err))
@@ -59,8 +47,105 @@ gen_controller_verilog :: proc(out_path: string) {
 	defer os.close(out)
 
 	for c, i in instruction_controls() {
-		fmt.fprintfln(out, "assign insts[12'o%4o] = 20'h%5x;", i, transmute(u32)c)
+		if code_like {
+			fmt.fprintfln(out, "assign insts[12'o%4o] = 20'h%5x;", i, transmute(u32)c)
+		} else {
+			fmt.fprintfln(out, "%5x", transmute(u32)c)
+		}
 	}
+}
+
+gen_controller_verilog :: proc(out_path: string) {
+	out_file, err := os.open(out_path, os.O_CREATE | os.O_TRUNC, 0o666)
+	if err != nil {
+		panic(fmt.tprint(err))
+	}
+	defer os.close(out_file)
+
+	buf_w := bufio.Writer{}
+	bufio.writer_init(&buf_w, os.stream_from_handle(out_file))
+	defer bufio.writer_destroy(&buf_w)
+	defer bufio.writer_flush(&buf_w)
+
+	w := bufio.writer_to_writer(&buf_w)
+
+	ctrls := instruction_controls()
+	// for c, i in ctrls {
+	// 	fmt.fprintfln(out, "assign insts[12'o%4o] = 20'h%5x;", i, transmute(u32)c)
+	// }
+
+	out_names := [20]string {
+		"",
+		"MemRead",
+		"MemWrite",
+		"AluSrc",
+		"MemToReg",
+		"",
+		"",
+		"RegDest[0]",
+		"RegDest[1]",
+		"BranchType[0]",
+		"BranchType[1]",
+		"BranchType[2]",
+		"JumpType[0]",
+		"JumpType[1]",
+		"MemWidth[0]",
+		"MemWidth[1]",
+		"AluFunc[0]",
+		"AluFunc[1]",
+		"AluFunc[2]",
+		"AluFunc[3]",
+	}
+
+	in_names := [12]string {
+		"LowerFunct[0]",
+		"LowerFunct[1]",
+		"LowerFunct[2]",
+		"LowerFunct[3]",
+		"LowerFunct[4]",
+		"LowerFunct[5]",
+		"Instruction[26]",
+		"Instruction[27]",
+		"Instruction[28]",
+		"Instruction[29]",
+		"Instruction[30]",
+		"Instruction[31]",
+	}
+
+	optimized := optimize_controls(ctrls[:])
+	for cor, i in optimized {
+		fmt.printfln("generating bit %d", i)
+		if out_names[i] == "" {
+			continue
+		}
+
+		fmt.wprintf(w, "    assign %s = ", out_names[i])
+		for cand, i in cor {
+			if i != 0 {
+				fmt.wprint(w, "\n        || ")
+			}
+
+			fmt.wprint(w, "(")
+
+			for citem, i in cand {
+				if .Used in citem {
+					if i != 0 {
+						fmt.wprint(w, " && ")
+					}
+
+					if .True not_in citem {
+						fmt.wprint(w, "!")
+					}
+					fmt.wprint(w, in_names[i])
+				}
+			}
+
+			fmt.wprint(w, ")")
+		}
+		fmt.wprint(w, ";\n")
+	}
+
+
 }
 
 instruction_controls :: proc() -> (insts: []Controls) {
@@ -86,10 +171,10 @@ instruction_controls :: proc() -> (insts: []Controls) {
 			// case .Div:
 			// 	cs = controls(R_Alu_Inst, .Div, .From_RD)
 			case .Jr:
-				cs = controls({}, j_type = {.Reg}, b_type = .Always)
+				cs = controls({.Alu_Src}, j_type = {.Reg}, b_type = .Always)
 			case .Jalr:
 				cs = controls(
-					{.Mem_To_Reg},
+					{.Mem_To_Reg, .Alu_Src},
 					.PC,
 					reg_dest = .Ret_Addr,
 					j_type = {.Reg},
@@ -113,9 +198,9 @@ instruction_controls :: proc() -> (insts: []Controls) {
 		case .Use_RegImm:
 			switch cast(Op_RegImm)Op(i).lower {
 			case .Bltz:
-				cs = controls({}, j_type = {.Rel}, b_type = .Lt)
+				cs = controls({.Alu_Src}, j_type = {.Rel}, b_type = .Lt)
 			case .Bgez:
-				cs = controls({}, j_type = {.Rel}, b_type = .Ge)
+				cs = controls({.Alu_Src}, j_type = {.Rel}, b_type = .Ge)
 			}
 		case .Use_Funct2:
 			switch cast(Op_Funct2)Op(i).lower {
@@ -141,13 +226,13 @@ instruction_controls :: proc() -> (insts: []Controls) {
 		case .Bne:
 			cs = controls({}, j_type = {.Rel}, b_type = .Ne)
 		case .Bgtz:
-			cs = controls({}, j_type = {.Rel}, b_type = .Gt)
+			cs = controls({.Alu_Src}, j_type = {.Rel}, b_type = .Gt)
 		case .Blez:
-			cs = controls({}, j_type = {.Rel}, b_type = .Le)
+			cs = controls({.Alu_Src}, j_type = {.Rel}, b_type = .Le)
 		case .J:
-			cs = controls({}, b_type = .Always)
+			cs = controls({.Alu_Src}, b_type = .Always)
 		case .Jal:
-			cs = controls({.Mem_To_Reg}, .PC, reg_dest = .Ret_Addr, b_type = .Always)
+			cs = controls({.Mem_To_Reg, .Alu_Src}, .PC, reg_dest = .Ret_Addr, b_type = .Always)
 		case .Andi:
 			cs = controls(I_Alu_Inst, .And, .From_RT)
 		case .Ori:
@@ -160,6 +245,7 @@ instruction_controls :: proc() -> (insts: []Controls) {
 	}
 	return
 }
+
 
 Op :: bit_field (u16) {
 	lower: u8     | 6,
@@ -299,13 +385,6 @@ Alu_Func :: enum (u8) {
 	Lt,
 	PC = 15,
 }
-
-// Jump_Type :: enum (u8) {
-// 	Rel_Reg,
-// 	Rel_Imm,
-// 	Abs_Reg,
-// 	Abs_Imm,
-// }
 
 Jump_Type :: bit_set[enum {
 	Reg,

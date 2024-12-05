@@ -12,10 +12,7 @@ module BranchUnit(
     );
     
     wire IsLt = A >> 31;
-    // NOTE: this doesn't necessarily work
-    // however the way the instruction set is used, the b**z instructions always have 0 for B
-    // except for BGEZ which doesn't use IsEq anyway.
-    wire IsEq = (A ^ B) == 0;
+    wire IsEq = (A ^ (BranchType[1] ? 0 : B)) == 0;
     
     // JumpType[1] = { 0 = Relative, 1 = Absolute }
     // JumpType[0] = { 0 = Immediate, 1 = Register }

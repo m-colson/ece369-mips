@@ -15,7 +15,7 @@ module MEM_WB_RegFile(
     output reg[31:0] PCOutFromMEM_WB
     );
 
-    always @(posedge CLK, posedge Reset) begin
+    always @(posedge CLK) begin
         if (Reset) begin
             AluResultFromMEM_WB <= 0;
             ReadDataFromMEM_WB <= 0;

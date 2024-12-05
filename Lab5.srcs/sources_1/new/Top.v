@@ -12,23 +12,28 @@ module Top(
     wire ClkSlow;
     ClkDiv topCD(
         .Clk(Clk),
-        .Rst(Reset),
         .ClkOut(ClkSlow)
     );
-    
-    wire[31:0] DisplayedWriteData;
-    wire[31:0] DisplayedProgramCounter;
-    Datapath topDP(
+   
+//    wire[31:0] DisplayedWriteData;
+//    wire[31:0] DisplayedProgramCounter;
+    wire[31:0] RegV0;
+    wire[31:0] RegV1;
+    (* keep_hierarchy = "yes" *) Datapath topDP(
         .CLK(ClkSlow),
         .Reset(Reset),
-        .DisplayedWriteData(DisplayedWriteData),
-        .DisplayedProgramCounter(DisplayedProgramCounter)
+//        .DisplayedWriteData(DisplayedWriteData),
+//        .DisplayedProgramCounter(DisplayedProgramCounter)
+        .RegV0(RegV0),
+        .RegV1(RegV1)
     );
 
     Two4DigitDisplay topT4DD(
         .Clk(Clk),
-        .NumberA(DisplayedWriteData[15:0]),
-        .NumberB(DisplayedProgramCounter[15:0]),
+//        .NumberA(DisplayedWriteData[15:0]),
+//        .NumberB(DisplayedProgramCounter[15:0]),
+        .NumberA(RegV1[15:0]),
+        .NumberB(RegV0[15:0]),
         .out7(out7),
         .en_out(en_out)
     );

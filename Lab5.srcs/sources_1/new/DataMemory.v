@@ -11,21 +11,19 @@ module DataMemory(
     output[31:0] ReadData
     );
 
-    reg[31:0] memory[0:1023];
+    reg[31:0] memory[0:8191];
 
     integer i;
-    always @(posedge CLK, posedge Reset) begin
-        if (Reset) begin
-            for (i = 0; i < 1024; i = i + 1) begin
-                memory[i] = 0;
-            end
-            
-            $readmemh("data_memory.mem", memory);
+    initial begin
+        for (i = 0; i < 8192; i = i + 1) begin
+            memory[i] = 0;
         end
-        else begin
-            if (MemWrite) begin
-                memory[Address >> 2] <= WriteData & ~(32'hffffff00 << {MemWidth, 3'd0});
-            end
+        $readmemh("data_memory.mem", memory);
+    end
+
+    always @(posedge CLK) begin
+        if (MemWrite) begin
+            memory[Address >> 2] <= (WriteData & ~(32'hffffff00 << {MemWidth, 3'd0})) | (memory[Address >> 2] & (32'hffffff00 << {MemWidth, 3'd0}));
         end
     end
 

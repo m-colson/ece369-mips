@@ -3,14 +3,15 @@
 module ProgramCounter(
     input CLK,
     input Reset,
+    input Stall,
     input [31:0] D,
     output reg[31:0] Q
     );
     
-    always @(posedge CLK, posedge Reset) begin
+    always @(posedge CLK) begin
         if (Reset) begin
             Q <= 0;    
-        end else begin
+        end else if (~Stall) begin
             Q <= D;
         end
     end

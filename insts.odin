@@ -1,45 +1,70 @@
 package main
 
 import "core:fmt"
+import "core:io"
 import "core:os"
 
 main :: proc() {
-	gen_controller_verilog("controls.mem.v")
-	gen_controller_mem("controls.mem")
+	// gen_controller_verilog("controls.v")
+	gen_controller_mem("controls.mem.v", true)
 
-	prog := collatz()
-	defer delete(prog)
-
-	if err := write_inst_mem(prog[:]); err != nil {
+	if err := copy_file("lab7\\vbsme_inst.mem", "instruction_memory.mem"); err != nil {
 		panic(fmt.tprint(err))
 	}
+	if err := copy_file("lab7\\vbsme_data.mem", "data_memory.mem"); err != nil {
+		panic(fmt.tprint(err))
+	}
+
+	// prog := collatz(1)
+	// defer delete(prog)
+
+	// if err := write_inst_mem(prog[:], 1); err != nil {
+	// 	panic(fmt.tprint(err))
+	// }
 }
 
-write_inst_mem :: proc(prog: []Inst, out_path := "instruction_memory.mem") -> (err: os.Errno) {
+copy_file :: proc(src: string, dst: string) -> (err: os.Errno) {
+	out := os.open(dst, os.O_CREATE | os.O_TRUNC) or_return
+	defer os.close(out)
+
+	inp := os.open(src) or_return
+	defer os.close(inp)
+
+	_, err = io.copy(os.stream_from_handle(out), os.stream_from_handle(inp))
+	return
+}
+
+write_inst_mem :: proc(
+	prog: []Inst,
+	gap := 6,
+	out_path := "instruction_memory.mem",
+) -> (
+	err: os.Errno,
+) {
 	out := os.open(out_path, os.O_CREATE | os.O_TRUNC) or_return
 	defer os.close(out)
 
 	for inst, i in prog {
 		fmt.fprintfln(out, "%8x\n", to_u32(inst))
-		for _ in 0 ..< 5 {
+		for _ in 1 ..< gap {
 			fmt.fprintfln(out, "%8x\n", 0)
 		}
 
-		fmt.printfln("%x: %v", i * 6 * 4, inst)
+		fmt.printfln("%x: %v", i * gap * 4, inst)
 	}
 
 	final_loop := []Inst{brn(.Eq, .Z, .Z, -1), alu(.Or, .S7, 0, .S7)}
 
-	final_base := len(prog) * 6 * 4
+	final_base := len(prog) * gap * 4
 	for inst, i in final_loop {
 		fmt.fprintfln(out, "%8x\n", to_u32(inst))
-		fmt.printfln("%x: %v", final_base + i, inst)
+		fmt.printfln("%x: %v", final_base + i * 4, inst)
 	}
 
 	return
 }
 
-collatz :: proc() -> (out: [dynamic]Inst) {
+collatz :: proc(gap: i16 = 6) -> (out: [dynamic]Inst) {
 	Val :: Reg.S0
 	Num1 :: Reg.T4
 	Num3 :: Reg.T5
@@ -51,13 +76,16 @@ collatz :: proc() -> (out: [dynamic]Inst) {
 		lv(3, Num3),
 		lv(0, Steps),
 		alu(.And, Val, 1, .T0),
-		brn(.Ne, .T0, .Z, 3 * 6 - 1),
+		brn(.Ne, .T0, .Z, 4 * gap - 1),
+		nop(),
 		alu(.Shr, Val, Num1, Val),
-		brn(.Eq, .Z, .Z, 3 * 6 - 1),
+		brn(.Eq, .Z, .Z, 4 * gap - 1),
+		nop(),
 		alu(.Mul, Val, Num3, Val),
 		alu(.Add, Val, 1, Val),
 		alu(.Add, Steps, 1, Steps),
-		brn(.Ne, Val, Num1, -(7 * 6 + 1)),
+		brn(.Ne, Val, Num1, -(9 * gap + 1)),
+		nop(),
 	}
 }
 
@@ -101,7 +129,7 @@ branches :: proc() -> (out: [dynamic]Inst) {
 	return
 }
 
-fibnums :: proc() -> [dynamic]Inst {
+fibnums :: proc(gap: i16 = 6) -> [dynamic]Inst {
 	N :: Reg.T0
 	N_1 :: Reg.S1
 	N_2 :: Reg.S2
@@ -112,7 +140,8 @@ fibnums :: proc() -> [dynamic]Inst {
 		lv(0, Addr),
 		lv(0, N_2),
 		lv(1, N_1),
-		jmp(11 * 6, link = true),
+		jmp(u32(14 * gap), link = true),
+		nop(),
 		// loop 
 		store(N_2, Addr),
 		alu(.Add, N_2, N_1, N),
@@ -120,14 +149,18 @@ fibnums :: proc() -> [dynamic]Inst {
 		lv(N, N_1),
 		alu(.Add, Addr, 4, Addr),
 		// until about to overflow
-		brnz(.Gt, N_1, -(5 * 6 + 1)),
+		brnz(.Gt, N_1, -(5 * gap + 1)),
+		nop(),
 		jmp(0),
+		nop(),
 		// clear mem
 		lv(-196, .T0),
 		store(.Z, .T0, 196),
 		alu(.Add, .T0, 4, .T0),
-		brnz(.Le, .T0, -(2 * 6 + 1)),
+		brnz(.Le, .T0, -(2 * gap + 1)),
+		nop(),
 		jmp(.RA),
+		nop(),
 	}
 }
 
@@ -250,6 +283,10 @@ Mem_Width :: enum {
 	Byte,
 	Half,
 	Word,
+}
+
+nop :: #force_inline proc() -> Inst {
+	return alu(.Shl, .Z, .Z, .Z)
 }
 
 lv :: #force_inline proc(b: Reg_Imm, dst: Reg, loc := #caller_location) -> Inst {

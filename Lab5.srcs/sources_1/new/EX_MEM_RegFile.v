@@ -21,7 +21,7 @@ module EX_MEM_RegFile(
     output reg[31:0] PCOutFromEX_MEM
     );
 
-    always @(posedge CLK, posedge Reset) begin
+    always @(posedge CLK) begin
         if (Reset) begin
             AluResultFromEX_MEM <= 0;
             ReadData2FromEX_MEM <= 0;
